@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<title>WebSocket Caller</title>
+	</head>
+	<body style="margin:0px;padding:0px;overflow: hidden;">
+		<canvas id="display" style="display:none;"></canvas>
+		<video autoplay id="video" style="display:none;"></video>
+		<form id="form" name="InputForm" style="width:300px;margin-left:auto;margin-right:auto;">
+			<p style="margin-left:40px;">
+				<input type="radio" name="DeviceTypeRadioButton" value="camera2D" checked> 2D Camera<br>
+				<input type="radio" name="DeviceTypeRadioButton" value="stereoCameraTopBottom"> Stereo Camera (Top/Bottom)<br>
+				<input type="radio" name="DeviceTypeRadioButton" value="display2D"> 2D Display<br>
+				<input type="radio" name="DeviceTypeRadioButton" value="stereoDisplayLeftRight"> Stereo Display (Left/Right)<br>
+			</p>
+			<table>
+				<tr>
+					<td>Name:</td>
+					<td><input name="NameTextField" type="text" size="35" maxlength="30"></td>
+				</tr>
+				<tr>
+					<td>Operator:</td>
+					<td><input name="OperatorTextField" type="text" size="35" maxlength="30"></td>
+				</tr>
+			</table>
+			<br>
+			<input style="width:300px;" type="button" name="RegisterButton" value="Register with operator">
+		</form>
+		<script id="vertexShader" type="x-shader/x-vertex">
+  			attribute vec3 position;
+			void main(void){gl_Position = vec4(position, 1.0);}
+		</script>
+		<script id="fragmentShader" type="x-shader/x-fragment">
+			precision mediump float;
+			uniform sampler2D textureSampler;
+			uniform int showCheckerBoard;
+			uniform bool applyHomography;
+			uniform mat3 h1;
+			uniform mat3 h2;
+			uniform bool isTopBottomSource;
+			uniform bool isLeftRightTarget;
+			uniform vec2 sourceDimension;
+			uniform vec2 targetDimension;
+			void main(void)
+			{
+				//get the dimension of a single image both of the source video and the target display
+				vec2 srcDim = sourceDimension;
+				vec2 trgDim = targetDimension;
+				srcDim.y /= (isTopBottomSource)?2.0:1.0;
+				trgDim.x /= (isLeftRightTarget)?2.0:1.0;
+
+				//check if we are in the left or right image and compute the coresponding frag coords
+				//isLeftRightTarget==false means always left
+				bool isTargetLeft = (gl_FragCoord.x>=trgDim.x)?false:true;
+				bool isSourceTop = isTargetLeft;
+				
+				//get the pixel-fragcoords in single image space
+				vec2 fragPixelCoords = gl_FragCoord.xy;
+				fragPixelCoords.x -= isTargetLeft?0.0:trgDim.x;
+
+				//test if we have to show a checkerboard
+				if(showCheckerBoard>0)
+				{
+					
+				}
+
+				//letterboxing:
+				//check how much the image must be scaled and offseted to fit the screen
+				//this preserves the aspect ratio, taking care of aspect ratio mismatch between screen and video stream
+				float scaleX = 1.0;
+				float offsetX = 0.0;
+				float scaleY = 1.0;
+				float offsetY = 0.0;
+				if( srcDim.y*(trgDim.x/srcDim.x) < trgDim.y )
+				{
+					scaleY = (srcDim.x/srcDim.y) * (trgDim.y/trgDim.x);
+					offsetY = (1.0-scaleY)/2.0;
+				}
+				else
+				{
+					scaleX = (srcDim.y/srcDim.x) * (trgDim.x/trgDim.y);
+					offsetX = (1.0-scaleX)/2.0;
+				}
+
+				//normalize the coordinates and apply scale and offset
+				float u = scaleX*(fragPixelCoords.x/trgDim.x)+offsetX;
+				float v = scaleY*(fragPixelCoords.y/trgDim.y)+offsetY;
+
+				//add offset for top bottom image
+				v += (isSourceTop?0.0:0.5);
+
+				//lookup the texture if coordinates are within range and make it black else
+				//TODO: check 0,0.5 and 0.5,1.0 if isTopBottomSource
+				if(u>=0.0&&u<=1.0&&v>=0.0&&v<=1.0)
+				{
+					gl_FragColor = texture2D(textureSampler, vec2(u,v));
+				}
+				else
+				{
+					gl_FragColor = vec4(0,0,0,1);
+				}
+			}
+		</script>
+		<script src="adapter.js"></script>
+		<script src="display.js"></script>
+		<script src="communication.js"></script>
+	</body>
+</html>
